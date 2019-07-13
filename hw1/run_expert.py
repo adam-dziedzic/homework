@@ -16,8 +16,7 @@ import numpy as np
 from hw1 import tf_util
 from hw1 import load_policy
 from hw1 import behavioral_cloning
-
-expert_data_dir = 'expert_data'
+from hw1 import utils
 
 
 def main():
@@ -25,20 +24,26 @@ def main():
     parser = argparse.ArgumentParser()
 
     # expert = "Ant-v2"
-    expert = "Reacher-v2"
+    env_name = "Reacher-v2"
 
     parser.add_argument('--expert_policy_file', type=str,
-                        default="experts/" + expert + ".pkl")
-    parser.add_argument('--envname', type=str, default=expert)
+                        # default="experts/" + env_name + ".pkl",
+                        default=utils.model_prefix + env_name + '.ckpt'
+                        )
+    parser.add_argument('--envname', type=str, default=env_name)
     parser.add_argument('--render', action='store_true')
     parser.add_argument("--max_timesteps", type=int)
-    parser.add_argument('--num_rollouts', type=int, default=20,
+    parser.add_argument('--num_rollouts', type=int, default=100,
                         help='Number of expert roll outs')
+    parser.add_argument('--hidden_units', type=int,
+                        # default=20,
+                        default=100)
     args = parser.parse_args()
 
     print('loading and building expert policy')
     if str(args.expert_policy_file).startswith("behave_models"):
-        policy_fn = behavioral_cloning.load_policy(env_name=args.envname)
+        policy_fn = behavioral_cloning.load_policy(
+            env_name=args.envname, hidden_units=args.hidden_units)
     else:
         policy_fn = load_policy.load_policy(args.expert_policy_file)
     print('loaded and built')
@@ -83,9 +88,10 @@ def main():
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
 
-        with open(os.path.join(expert_data_dir, args.envname + '.pkl'),
-                  'wb') as f:
-            pickle.dump(expert_data, f, pickle.HIGHEST_PROTOCOL)
+        if str(args.expert_policy_file).startswith("experts"):
+            with open(os.path.join(utils.expert_data_dir,
+                                   args.envname + '.pkl'), 'wb') as f:
+                pickle.dump(expert_data, f, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == '__main__':

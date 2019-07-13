@@ -1,38 +1,27 @@
 import tensorflow as tf
 import pickle
-from hw1.run_expert import expert_data_dir
+from hw1 import utils
 import numpy as np
 from hw1 import tf_util
 
-sess = None
-model_prefix = 'behave_models/model_'
-
-input_output_size = {'Reacher-v2' : (7, 2)}
-
-def tf_reset():
-    try:
-        if sess is not None:
-            sess.close()
-    except:
-        print("Failed to close the session.")
-    tf.reset_default_graph()
-    return tf.Session()
-
 
 def read_data(filename):
-    with open(file=filename, mode="r") as f:
+    with open(file=filename, mode="rb") as f:
         data = pickle.load(file=f)
     observations = data['observations']
-    actions = data['actions']
+    actions = np.squeeze(data['actions'])
     return observations, actions
 
 
-def create_model(input_size=1, output_size=1):
-    tf_reset()
+def create_model(mean, std, input_size=1, output_size=1, hidden_units=20):
     # create input PlaceHolder
     # in the behavioral clonning case, you would use, for example, 7 instead of 1 for the
     # last dimension, since 7 represents 7 joins of our robot
     input_ph = tf.placeholder(dtype=tf.float32, shape=[None, input_size])
+
+    # normalize the input
+    input_ph_norm = (input_ph - mean) / (std + 1e-6)
+
     # create the output PlaceHolder: this is what we expect as the output and what we use
     # to compute the error and back-propagate it.
     # for the output in the behavioral cloning algorithm you could use 4 for the 4 possible
@@ -43,18 +32,18 @@ def create_model(input_size=1, output_size=1):
 
     # create variables
     W0 = tf.get_variable(
-        name='W0', shape=[1, 20],
+        name='W0', shape=[input_size, hidden_units],
         initializer=tf.contrib.layers.xavier_initializer())
     W1 = tf.get_variable(
-        name='W1', shape=[20, 20],
+        name='W1', shape=[hidden_units, hidden_units],
         initializer=tf.contrib.layers.xavier_initializer())
     W2 = tf.get_variable(
-        name='W2', shape=[20, 1],
+        name='W2', shape=[hidden_units, output_size],
         initializer=tf.contrib.layers.xavier_initializer())
 
-    b0 = tf.get_variable(name='b0', shape=[20],
+    b0 = tf.get_variable(name='b0', shape=[hidden_units],
                          initializer=tf.constant_initializer(0.))
-    b1 = tf.get_variable(name='b1', shape=[20],
+    b1 = tf.get_variable(name='b1', shape=[hidden_units],
                          initializer=tf.constant_initializer(0.))
     b2 = tf.get_variable(name='b2', shape=[1],
                          initializer=tf.constant_initializer(0.))
@@ -72,7 +61,7 @@ def create_model(input_size=1, output_size=1):
     # activations = [tf.nn.relu, tf.nn.relu, tf.nn.relu]
 
     # create computation graph
-    layer = input_ph
+    layer = input_ph_norm
     for W, b, activation in zip(weights, biases, activations):
         layer = tf.matmul(layer, W) + b
         if activation is not None:
@@ -82,7 +71,8 @@ def create_model(input_size=1, output_size=1):
     return input_ph, output_ph, output_pred
 
 
-def train_model(inputs, outputs, output_pred, input_ph, output_ph, env_name):
+def train_model(inputs, outputs, output_pred, input_ph, output_ph, env_name,
+                sess, train_steps=10000):
     # create loss (mean squared error loss)
     # we compute the average loss over the mini-batch
     # the output_pred and output_ph have many data items - the size of the mini-batch
@@ -100,7 +90,7 @@ def train_model(inputs, outputs, output_pred, input_ph, output_ph, env_name):
 
     # run training
     batch_size = 32
-    for training_step in range(10000):
+    for training_step in range(train_steps):
         # get a random subset of the training data
         indices = np.random.randint(low=0, high=len(inputs), size=batch_size)
         input_batch = inputs[indices]
@@ -114,32 +104,61 @@ def train_model(inputs, outputs, output_pred, input_ph, output_ph, env_name):
 
         # print the mse every so often
         if training_step % 1000 == 0:
-            print('{0:04d} mse: {1:.3f}'.format(training_step, mse_run))
-            saver.save(sess, model_prefix + env_name + '.ckpt')
+            print('{0:04d} mse: {1:.9f}'.format(training_step, mse_run))
+            saver.save(sess, utils.model_prefix + env_name + '.ckpt')
 
 
-def train_policy(env_name):
-    obs, actions = read_data(expert_data_dir + "/" + env_name + ".pkl")
+def get_mean_std(obs):
+    mean = np.mean(obs, axis=0)
+    std = np.std(obs, axis=0)
+    return mean, std
+
+
+def train_policy(env_name, hidden_units=20, train_steps=10000):
+    obs, actions = read_data(utils.expert_data_dir + "/" + env_name + ".pkl")
+    mean, std = get_mean_std(obs)
+    print("mean, std: ", mean, " ", std)
     input_size = obs.shape[1]
     output_size = actions.shape[1]
-    input_ph, output_ph, output_pred = create_model(input_size=input_size,
-                                                    output_size=output_size)
-    train_model(inputs=obs, outputs=actions, input_ph = input_ph,
-                output_ph=output_ph, output_pred=output_pred)
+    with tf.Session() as sess:
+        input_ph, output_ph, output_pred = create_model(
+            mean=mean, std=std, input_size=input_size, output_size=output_size,
+            hidden_units=hidden_units)
+        train_model(inputs=obs, outputs=actions, input_ph=input_ph,
+                    output_ph=output_ph, output_pred=output_pred,
+                    env_name=env_name, sess=sess, train_steps=train_steps)
     return input_size, output_size
 
-def load_policy(env_name):
-    input_size, output_size = input_output_size[env_name]
-    input_ph, output_ph, output_pred = create_model(input_size=input_size,
-                                                    output_size=output_size)
+
+def load_policy(env_name, hidden_units):
+    try:
+        input_size, output_size, mean, std = utils.input_output_size[env_name]
+    except KeyError:
+        obs, actions = read_data(
+            utils.expert_data_dir + "/" + env_name + ".pkl")
+        input_size = obs.shape[1]
+        output_size = actions.shape[1]
+        mean, std = get_mean_std(obs)
+
+    input_ph, output_ph, output_pred = create_model(
+        mean=mean, std=std, input_size=input_size, output_size=output_size,
+        hidden_units=hidden_units)
+
     # restore the saved model
     saver = tf.train.Saver()
-    saver.restore(sess, model_prefix + env_name + '.ckpt')
-    obs_bo = tf.placeholder(tf.float32, [None, None])
+    with tf.Session() as sess:
+        saver.restore(sess, utils.model_prefix + env_name + '.ckpt')
 
-    a_ba = output_pred(obs_bo)
-    policy_fn = tf_util.function([obs_bo], a_ba)
+    policy_fn = tf_util.function([input_ph], output_pred)
     return policy_fn
 
+
 if __name__ == "__main__":
-    train_policy('Reacher-v2')
+    env_name = 'Reacher-v2'
+    hidden_units = 100
+    train_steps = 50000
+    input_size, output_size = train_policy(env_name=env_name,
+                                           hidden_units=hidden_units,
+                                           train_steps=train_steps)
+    print("input size: ", input_size)
+    print("output size: ", output_size)
