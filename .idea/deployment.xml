@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="ady@skr-compute1.cs.uchicago.edu:22">
+    <serverData>
+      <paths name="ady@skr-compute1.cs.uchicago.edu:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/ady/code/homework" local="$PROJECT_DIR$" web="/home/ady/code/homework" />
+            <mapping deploy="/home/ady/code/bandlimited-cnns-pycharm-win" local="$PROJECT_DIR$/../bandlimited-cnns" web="/home/ady/code/bandlimited-cnns-pycharm-win" />
+            <mapping deploy="/home/ady/code/dl-4-tsc" local="$PROJECT_DIR$/../dl-4-tsc" web="/home/ady/code/dl-4-tsc" />
+            <mapping deploy="/home/ady/code/wifiml" local="$PROJECT_DIR$/../wifiml" web="/home/ady/code/wifiml" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

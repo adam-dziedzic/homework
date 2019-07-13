@@ -3,7 +3,7 @@
 """
 Code to load an expert policy and generate roll-out data for behavioral cloning.
 Example usage:
-    python run_expert.py experts/Humanoid-v1.pkl Humanoid-v1 --render \
+    python run_expert.py experts/Humanoid-v2.pkl Humanoid-v2 --render \
             --num_rollouts 20
 
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
@@ -13,15 +13,23 @@ import os
 import pickle
 import tensorflow as tf
 import numpy as np
-import tf_util
-import gym
-import load_policy
+from hw1 import tf_util
+from hw1 import load_policy
+from hw1 import behavioral_cloning
+
+expert_data_dir = 'expert_data'
+
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('expert_policy_file', type=str)
-    parser.add_argument('envname', type=str)
+
+    # expert = "Ant-v2"
+    expert = "Reacher-v2"
+
+    parser.add_argument('--expert_policy_file', type=str,
+                        default="experts/" + expert + ".pkl")
+    parser.add_argument('--envname', type=str, default=expert)
     parser.add_argument('--render', action='store_true')
     parser.add_argument("--max_timesteps", type=int)
     parser.add_argument('--num_rollouts', type=int, default=20,
@@ -29,7 +37,10 @@ def main():
     args = parser.parse_args()
 
     print('loading and building expert policy')
-    policy_fn = load_policy.load_policy(args.expert_policy_file)
+    if str(args.expert_policy_file).startswith("behave_models"):
+        policy_fn = behavioral_cloning.load_policy(env_name=args.envname)
+    else:
+        policy_fn = load_policy.load_policy(args.expert_policy_file)
     print('loaded and built')
 
     with tf.Session():
@@ -38,6 +49,7 @@ def main():
         import gym
         env = gym.make(args.envname)
         max_steps = args.max_timesteps or env.spec.timestep_limit
+        print("max steps: ", max_steps)
 
         returns = []
         observations = []
@@ -46,10 +58,10 @@ def main():
             print('iter', i)
             obs = env.reset()
             done = False
-            totalr = 0.
+            totalr = 0.  # total rewards
             steps = 0
             while not done:
-                action = policy_fn(obs[None,:])
+                action = policy_fn(obs[None, :])
                 observations.append(obs)
                 actions.append(action)
                 obs, r, done, _ = env.step(action)
@@ -57,9 +69,11 @@ def main():
                 steps += 1
                 if args.render:
                     env.render()
-                if steps % 100 == 0: print("%i/%i"%(steps, max_steps))
+                if steps % 100 == 0: print("%i/%i" % (steps, max_steps))
                 if steps >= max_steps:
                     break
+
+            print('Episode finished after {} timesteps'.format(steps + 1))
             returns.append(totalr)
 
         print('returns', returns)
@@ -69,8 +83,10 @@ def main():
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
 
-        with open(os.path.join('expert_data', args.envname + '.pkl'), 'wb') as f:
+        with open(os.path.join(expert_data_dir, args.envname + '.pkl'),
+                  'wb') as f:
             pickle.dump(expert_data, f, pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == '__main__':
     main()

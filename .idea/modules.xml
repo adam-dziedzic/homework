@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/../dl-4-tsc/.idea/dl-4-tsc.iml" filepath="$PROJECT_DIR$/../dl-4-tsc/.idea/dl-4-tsc.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/homework.iml" filepath="$PROJECT_DIR$/.idea/homework.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../bandlimited-cnns/.idea/time-series-machine-learning.iml" filepath="$PROJECT_DIR$/../bandlimited-cnns/.idea/time-series-machine-learning.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../wifiml/.idea/wifiml.iml" filepath="$PROJECT_DIR$/../wifiml/.idea/wifiml.iml" />
+    </modules>
+  </component>
+</project>
