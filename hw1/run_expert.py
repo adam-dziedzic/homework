@@ -8,91 +8,64 @@ Example usage:
 
 Author of this script and included expert policies: Jonathan Ho (hoj@openai.com)
 """
-
-import os
-import pickle
-import tensorflow as tf
-import numpy as np
-from hw1 import tf_util
+from hw1.params import Arguments
+from hw1.models import run_model
 from hw1 import load_policy
 from hw1 import behavioral_cloning
-from hw1 import utils
 
 
-def main():
+def get_args():
     import argparse
     parser = argparse.ArgumentParser()
-
-    # expert = "Ant-v2"
-    env_name = "Reacher-v2"
-
-    parser.add_argument('--expert_policy_file', type=str,
-                        # default="experts/" + env_name + ".pkl",
-                        default=utils.model_prefix + env_name + '.ckpt'
+    args = Arguments()
+    parser.add_argument('--expert_policy_file',
+                        type=str,
+                        default=args.get_model_file()
                         )
-    parser.add_argument('--envname', type=str, default=env_name)
-    parser.add_argument('--render', action='store_true')
-    parser.add_argument("--max_timesteps", type=int)
-    parser.add_argument('--num_rollouts', type=int, default=100,
-                        help='Number of expert roll outs')
-    parser.add_argument('--hidden_units', type=int,
-                        # default=20,
-                        default=100)
-    args = parser.parse_args()
+    parser.add_argument('--env_name',
+                        type=str,
+                        default=args.env_name
+                        )
+    parser.add_argument('--render',
+                        action='store_true',
+                        default=args.render
+                        )
+    parser.add_argument("--max_timesteps",
+                        type=int,
+                        default=args.max_timesteps
+                        )
+    parser.add_argument('--num_rollouts',
+                        type=int,
+                        default=args.rollouts,
+                        help='Number of expert rollouts / episodes.'
+                        )
+    parser.add_argument('--hidden_units',
+                        type=int,
+                        default=args.hidden_units
+                        )
+    parser.add_argument('--model_type',
+                       type=str,
+                       default=args.model_type)
+    parser.add_argument('--expert_data_dir',
+                        type=str,
+                        default=args.expert_data_dir)
+    parser.add_argument('--verbose',
+                        type=bool,
+                        default=args.verbose)
 
-    print('loading and building expert policy')
-    if str(args.expert_policy_file).startswith("behave_models"):
-        policy_fn = behavioral_cloning.load_policy(
-            env_name=args.envname, hidden_units=args.hidden_units)
-    else:
-        policy_fn = load_policy.load_policy(args.expert_policy_file)
-    print('loaded and built')
 
-    with tf.Session():
-        tf_util.initialize()
-
-        import gym
-        env = gym.make(args.envname)
-        max_steps = args.max_timesteps or env.spec.timestep_limit
-        print("max steps: ", max_steps)
-
-        returns = []
-        observations = []
-        actions = []
-        for i in range(args.num_rollouts):
-            print('iter', i)
-            obs = env.reset()
-            done = False
-            totalr = 0.  # total rewards
-            steps = 0
-            while not done:
-                action = policy_fn(obs[None, :])
-                observations.append(obs)
-                actions.append(action)
-                obs, r, done, _ = env.step(action)
-                totalr += r
-                steps += 1
-                if args.render:
-                    env.render()
-                if steps % 100 == 0: print("%i/%i" % (steps, max_steps))
-                if steps >= max_steps:
-                    break
-
-            print('Episode finished after {} timesteps'.format(steps + 1))
-            returns.append(totalr)
-
-        print('returns', returns)
-        print('mean return', np.mean(returns))
-        print('std of return', np.std(returns))
-
-        expert_data = {'observations': np.array(observations),
-                       'actions': np.array(actions)}
-
-        if str(args.expert_policy_file).startswith("experts"):
-            with open(os.path.join(utils.expert_data_dir,
-                                   args.envname + '.pkl'), 'wb') as f:
-                pickle.dump(expert_data, f, pickle.HIGHEST_PROTOCOL)
+    parsed_args = parser.parse_args()
+    args.set_parsed_args(parsed_args=parsed_args)
+    return args
 
 
 if __name__ == '__main__':
-    main()
+    args = get_args()
+    print('loading and building expert policy')
+    if str(args.expert_policy_file).startswith("behave_models"):
+        policy_fn = behavioral_cloning.load_policy(args=args)
+    else:
+        policy_fn = load_policy.load_policy(args.expert_policy_file)
+    print('loaded and built')
+    args.rollouts = 100
+    run_model(args=args, policy_fn=policy_fn)
